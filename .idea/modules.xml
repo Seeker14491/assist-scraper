@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/assist-scraper.iml" filepath="$PROJECT_DIR$/.idea/modules/assist-scraper.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/assist-scraper_main.iml" filepath="$PROJECT_DIR$/.idea/modules/assist-scraper_main.iml" group="assist-scraper" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/assist-scraper_test.iml" filepath="$PROJECT_DIR$/.idea/modules/assist-scraper_test.iml" group="assist-scraper" />
+    </modules>
+  </component>
+</project>
