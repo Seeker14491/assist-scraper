@@ -1,40 +1,55 @@
-import javax.net.ssl.HttpsURLConnection;
+import org.jsoup.Connection;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
+
 import java.io.File;
 import java.io.IOException;
-import java.io.OutputStreamWriter;
-import java.net.*;
+import java.util.ArrayList;
 import java.util.Scanner;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class Main {
+    private static Pattern classTimeSlotPattern
+            = Pattern.compile("(\\S+) (\\d+)-(\\d+)<br>(\\d+)\\D+<br>(\\d+:\\d+\\s+.m)-(\\d+:\\d+\\s+.m)<br>" +
+            "(\\S+\\s+\\S+)");
+
     public static void main(String[] args) throws IOException {
-        CookieHandler.setDefault(new CookieManager(null, CookiePolicy.ACCEPT_ALL));
+        String userName;
+        String pass;
+        try (Scanner credentialsFile = new Scanner(new File("credentials.txt"))) {
+            userName = credentialsFile.nextLine();
+            pass = credentialsFile.nextLine();
+        }
 
-        Scanner credentialsFile = new Scanner(new File("credentials.txt"));
-        String userName = credentialsFile.nextLine();
-        String pass = credentialsFile.nextLine();
+        Connection.Response loginResponse = Jsoup.connect("https://mywebsis.utrgv.edu/PROD/twbkwbis.P_ValLogin")
+                .referrer("https://mywebsis.utrgv.edu/PROD/twbkwbis.P_WWWLogin")
+                .data("sid", userName)
+                .data("PIN", pass)
 
-        int rc = login(userName, pass);
-        System.out.println(rc);
+                // The server checks this to see if cookies are enabled. We can't log on without this.
+                .cookie("TESTID", "set")
 
-        // Referrer: "https://mywebsis.utrgv.edu/PROD/twbkwbis.P_GenMenu?name=bmenu.P_RegMnu"
-    }
+                .method(Connection.Method.POST)
+                .execute();
 
-    private static int login(String userName, String pass) throws IOException {
-        HttpsURLConnection connection
-                = (HttpsURLConnection) (new URL("https://mywebsis.utrgv.edu/PROD/twbkwbis.P_ValLogin")).openConnection();
+        Document scheduleDocument = Jsoup.connect("https://mywebsis.utrgv.edu/PROD/bwskfshd.P_CrseSchd")
+                .referrer("https://mywebsis.utrgv.edu/PROD/twbkwbis.P_GenMenu?name=bmenu.P_RegMnu")
+                .cookies(loginResponse.cookies())
+                .get();
 
-        connection.setRequestMethod("POST");
-        connection.setDoOutput(true);
+        Elements scheduleElements = scheduleDocument.getElementsByAttributeValueStarting("href", "/PROD/bwskfshd" +
+                ".P_CrseSchdDetl");
 
-        // We get a 403 if we don't set this
-        connection.setRequestProperty("Referer", "https://mywebsis.utrgv.edu/PROD/twbkwbis.P_WWWLogin");
+        ArrayList<ClassTimeSlot> classTimeSlots = new ArrayList<>();
+        for (Element e : scheduleElements) {
+            int dayId = e.parent().elementSiblingIndex();
 
-        OutputStreamWriter wr = new OutputStreamWriter(connection.getOutputStream());
-        String data = "sid=" + URLEncoder.encode(userName, "UTF-8") + "&PIN=" + URLEncoder.encode(pass, "UTF-8");
-        wr.write(data);
-        wr.flush();
-        wr.close();
+            Matcher matcher = classTimeSlotPattern.matcher(e.html());
 
-        return connection.getResponseCode();
+            System.out.print(e.html() + "\n\n");
+        }
     }
 }
