@@ -1,5 +1,8 @@
-import com.gargoylesoftware.htmlunit.WebClient;
-import com.gargoylesoftware.htmlunit.html.*;
+import org.jsoup.Connection;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 
 import java.io.File;
 import java.io.IOException;
@@ -11,67 +14,66 @@ import java.util.regex.Pattern;
 
 public class Main {
     private static Pattern classTimeSlotPattern
-            = Pattern.compile("(\\S+)\\s+(\\d+)-(\\d+)\\s+(\\d+)\\D+(\\d+:\\d+\\s+.m)-(\\d+:\\d+\\s+.m)\\s+(\\S+\\s+\\S+)");
+            = Pattern.compile("(\\S+) (\\d+)-(\\d+)<br>(\\d+)\\D+<br>(\\d+:\\d+\\s+.m)-(\\d+:\\d+\\s+.m)<br>" +
+            "(\\S+\\s+\\S+)");
 
     public static void main(String[] args) throws IOException {
-        Scanner credentialsFile = new Scanner(new File("credentials.txt"));
-        String userName = credentialsFile.nextLine();
-        String pass = credentialsFile.nextLine();
+        String userName;
+        String pass;
+        try (Scanner credentialsFile = new Scanner(new File("credentials.txt"))) {
+            userName = credentialsFile.nextLine();
+            pass = credentialsFile.nextLine();
+        }
 
         List<ClassTimeSlot> schedule = getClassTimeSlots(userName, pass);
 
         for (ClassTimeSlot c : schedule) {
-            System.out.println(c.subject + " " + c.course);
+            System.out.println(c);
         }
     }
 
     private static List<ClassTimeSlot> getClassTimeSlots(String userName, String pass) throws IOException {
-        WebClient client = new WebClient();
-        client.getOptions().setCssEnabled(false);
-        client.getOptions().setJavaScriptEnabled(false);
+        Connection.Response loginResponse = Jsoup.connect("https://mywebsis.utrgv.edu/PROD/twbkwbis.P_ValLogin")
+                .referrer("https://mywebsis.utrgv.edu/PROD/twbkwbis.P_WWWLogin")
+                .data("sid", userName)
+                .data("PIN", pass)
 
-        HtmlPage loginPage = client.getPage("https://mywebsis.utrgv.edu");
+                // The server checks this to see if cookies are enabled. We can't log on without this.
+                .cookie("TESTID", "set")
 
-        HtmlForm loginForm = loginPage.getForms().get(0);
+                .method(Connection.Method.POST)
+                .execute();
 
-        HtmlTextInput usernameInput = loginForm.getInputByName("sid");
-        HtmlPasswordInput passInput = loginForm.getInputByName("PIN");
-        HtmlSubmitInput loginButton = loginForm.getInputByValue("Login");
+        Document scheduleDocument = Jsoup.connect("https://mywebsis.utrgv.edu/PROD/bwskfshd.P_CrseSchd")
+                .referrer("https://mywebsis.utrgv.edu/PROD/twbkwbis.P_GenMenu?name=bmenu.P_RegMnu")
+                .cookies(loginResponse.cookies())
+                .get();
 
-        usernameInput.setValueAttribute(userName);
-        passInput.setValueAttribute(pass);
-
-        HtmlPage mainMenu = loginButton.click();
-        HtmlPage studentServices = mainMenu.getAnchorByText("Student Services").click();
-        HtmlPage registration = studentServices.getAnchorByText("Registration").click();
-        HtmlPage weekAtAGlance = registration.getAnchorByText("Week at a Glance").click();
-
-        List<HtmlAnchor> classes = weekAtAGlance.getAnchors();
+        Elements scheduleElements = scheduleDocument.getElementsByAttributeValueStarting("href", "/PROD/bwskfshd" +
+                ".P_CrseSchdDetl");
 
         ArrayList<ClassTimeSlot> classTimeSlots = new ArrayList<>();
-        for (HtmlAnchor c : classes) {
-            if (c.getHrefAttribute().startsWith("/PROD/bwskfshd.P_CrseSchdDetl")) {
-                // Subtracting 1 then dividing by 2 is needed for some reason. 0 -> Monday, 1 -> Tuesday ...
-                int dayId = (c.getParentNode().getIndex() - 1) / 2;
+        for (Element e : scheduleElements) {
+            int dayId = e.parent().elementSiblingIndex();
 
-                Matcher matcher = classTimeSlotPattern.matcher(c.asText());
-                // FIXME: don't fail silently
-                if (matcher.matches()) {
-                    String subject = matcher.group(1);
-                    int course = Integer.parseInt(matcher.group(2));
-                    int section = Integer.parseInt(matcher.group(3));
-                    int crn = Integer.parseInt(matcher.group(4));
+            Matcher matcher = classTimeSlotPattern.matcher(e.html());
 
-                    // FIXME: use proper day of week type, or at least a String of the day's name
-                    String dayOfWeek = String.valueOf(dayId);
+            // FIXME: don't fail silently
+            if (matcher.matches()) {
+                String subject = matcher.group(1);
+                int course = Integer.parseInt(matcher.group(2));
+                int section = Integer.parseInt(matcher.group(3));
+                int crn = Integer.parseInt(matcher.group(4));
 
-                    String startTime = matcher.group(5);
-                    String endTime = matcher.group(6);
-                    String location = matcher.group(7);
+                // FIXME: use proper day of week type, or at least a String of the day's name
+                String dayOfWeek = String.valueOf(dayId);
 
-                    classTimeSlots.add(
-                            new ClassTimeSlot(subject, course, section, crn, dayOfWeek, startTime, endTime, location));
-                }
+                String startTime = matcher.group(5);
+                String endTime = matcher.group(6);
+                String location = matcher.group(7);
+
+                classTimeSlots.add(
+                        new ClassTimeSlot(subject, course, section, crn, dayOfWeek, startTime, endTime, location));
             }
         }
 
