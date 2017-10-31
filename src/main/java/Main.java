@@ -7,6 +7,7 @@ import org.jsoup.select.Elements;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Scanner;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -24,6 +25,14 @@ public class Main {
             pass = credentialsFile.nextLine();
         }
 
+        List<ClassTimeSlot> schedule = getClassTimeSlots(userName, pass);
+
+        for (ClassTimeSlot c : schedule) {
+            System.out.println(c);
+        }
+    }
+
+    private static List<ClassTimeSlot> getClassTimeSlots(String userName, String pass) throws IOException {
         Connection.Response loginResponse = Jsoup.connect("https://mywebsis.utrgv.edu/PROD/twbkwbis.P_ValLogin")
                 .referrer("https://mywebsis.utrgv.edu/PROD/twbkwbis.P_WWWLogin")
                 .data("sid", userName)
@@ -49,7 +58,25 @@ public class Main {
 
             Matcher matcher = classTimeSlotPattern.matcher(e.html());
 
-            System.out.print(e.html() + "\n\n");
+            // FIXME: don't fail silently
+            if (matcher.matches()) {
+                String subject = matcher.group(1);
+                int course = Integer.parseInt(matcher.group(2));
+                int section = Integer.parseInt(matcher.group(3));
+                int crn = Integer.parseInt(matcher.group(4));
+
+                // FIXME: use proper day of week type, or at least a String of the day's name
+                String dayOfWeek = String.valueOf(dayId);
+
+                String startTime = matcher.group(5);
+                String endTime = matcher.group(6);
+                String location = matcher.group(7);
+
+                classTimeSlots.add(
+                        new ClassTimeSlot(subject, course, section, crn, dayOfWeek, startTime, endTime, location));
+            }
         }
+
+        return classTimeSlots;
     }
 }

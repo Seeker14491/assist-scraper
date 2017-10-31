@@ -23,4 +23,18 @@ public class ClassTimeSlot {
         this.endTime = endTime;
         this.location = location;
     }
+
+    @Override
+    public String toString() {
+        return "ClassTimeSlot{" +
+                "subject='" + subject + '\'' +
+                ", course=" + course +
+                ", section=" + section +
+                ", crn=" + crn +
+                ", dayOfWeek='" + dayOfWeek + '\'' +
+                ", startTime='" + startTime + '\'' +
+                ", endTime='" + endTime + '\'' +
+                ", location='" + location + '\'' +
+                '}';
+    }
 }
